@@ -280,6 +280,7 @@ git clone https://github.com/AniketSindhu/crowdfunding_tezos_dapp.git
 5. Now we will understand the whole frontend code in detail.
 
 # Understanding frontend
+## Config
 1. First of all go to `src/config/config.js`.
 ```js
 var config = {
@@ -296,6 +297,411 @@ export default config;
 Replace the contractAddress's value to the address that we got from previous steps after deploying the .
 
 This config file will have the contract address of our deployed `crowdfunding` contract and base URL for the tzkt API.
+
+## Wallet Connection
+1. Lets first check the wallet connections. Go to `src/components/Wallet/ConnectButton.jsx`.
+
+This component is responsible for connecting the wallet.
+
+In the `useEffect` we create a option map with our settings and provide it to our BeconWallet instance. Then we set the Tezos client with the the `wallet`. 
+
+When we click on our button `connectWallet` function will be called which will open the becon wallet GUI to connect the wallet. We used `wallet.requestPermissions` for that. And setup other things based on the output.
+
+The whole file looks like this
+- src/components/Wallet/ConnectButton.jsx
+```js
+import React, { useEffect } from "react";
+import { BeaconWallet } from "@taquito/beacon-wallet";
+function ConnectButton({
+  Tezos,
+  setWallet,
+  setUserAddress,
+  setUserBalance,
+  setBeaconConnection,
+  wallet,
+}) {
+  const setup = async (userAddress) => {
+    setUserAddress(userAddress);
+    // updates balance
+    const balance = await Tezos.tz.getBalance(userAddress);
+    setUserBalance(balance.toNumber());
+    //console.log("balance", balance.toNumber());
+  };
+
+  const connectWallet = async () => {
+    try {
+      console.log("connecting wallet", wallet);
+      await wallet.requestPermissions({
+        network: {
+          type: "granadanet",
+        },
+      });
+      // gets user's address
+      //console.log("connecting wallet");
+      const userAddress = await wallet.getPKH();
+      //console.log("userAddress", userAddress);
+      await setup(userAddress);
+      setBeaconConnection(true);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+  useEffect(() => {
+    (async () => {
+      console.log("Called");
+      // creates a wallet instance
+      const options = {
+        name: "Crowdfunding Dapp",
+        iconUrl: "https://tezostaquito.io/img/favicon.png",
+        preferredNetwork: "granadanet",
+      };
+      const wallet = new BeaconWallet(options, {
+        name: "Crowdfunding Dapp",
+        preferredNetwork: "granadanet",
+        disableDefaultEvents: true,
+      });
+      Tezos.setWalletProvider(wallet);
+      setWallet(wallet);
+      // checks if wallet was connected before
+      const activeAccount = await wallet.client.getActiveAccount();
+      if (activeAccount) {
+        console.log(activeAccount);
+        const userAddress = await wallet.getPKH();
+        await setup(userAddress);
+        setBeaconConnection(true);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div>
+      <button
+        style={{
+          margin: "20px 10px 10px 10px",
+          backgroundColor: "#1976D2",
+          color: "white",
+          border: "none",
+          cursor: "pointer",
+          padding: "10px 20px",
+        }}
+        onClick={connectWallet}
+      >
+        <b>Connect Wallet</b>
+      </button>
+    </div>
+  );
+}
+
+export default ConnectButton;
+
+```
+
+2. Now we have the connect button ready. But we need one disconnect button also which will be shown when a wallet is already connected. Lets also show user's address and user's balance on the button.
+
+Go to `src/components/Wallet/DisconnectButton.jsx`.
+
+Here you can see we have one function `disconnectWallet` which will be called when someone clicks on the button. This will set all our wallet variables to deafault and will disconnect wallet.
+
+In the button UI we are showing user's address by slicing it. Showing only first 5 chracters and last 5 chracters. Also we are showing user balance which in mutez so will convert it to tez by dividing it by 1000000. 
+
+The whole file looks like this
+- src/components/Wallet/DisconnectButton.jsx
+
+```js
+import { TezosToolkit } from "@taquito/taquito";
+
+function DisconnectButton({
+  wallet,
+  setUserAddress,
+  setUserBalance,
+  setWallet,
+  setTezos,
+  setBeaconConnection,
+  userBalance,
+  userAddress,
+}) {
+  const disconnectWallet = async () => {
+    //window.localStorage.clear();
+    setUserAddress("");
+    setUserBalance(0);
+    setWallet(null);
+    const tezosTK = new TezosToolkit("https://granadanet.smartpy.io");
+    setTezos(tezosTK);
+    setBeaconConnection(false);
+    console.log("disconnecting wallet");
+    if (wallet) {
+      await wallet.client.removeAllAccounts();
+      await wallet.client.removeAllPeers();
+      await wallet.client.destroy();
+    }
+  };
+  return (
+    <div>
+      <button
+        style={{
+          margin: "20px 10px 10px 10px",
+          backgroundColor: "#1976D2",
+          color: "white",
+          border: "none",
+          cursor: "pointer",
+          padding: "10px",
+        }}
+        onClick={disconnectWallet}
+      >
+        <div>
+          <b>Disconnect Wallet</b>
+          <div style={{ display: "flex", flexDirection: "row" }}>
+            <div style={{ margin: "0px 5px 0px 5px" }}>
+              {(userBalance / 1000000).toFixed(3)} Tez
+            </div>
+            |{"  "}
+            <div style={{ margin: "0px 5px 0px 5px" }}>
+              {userAddress.slice(0, 5)}...{userAddress.slice(-5)}
+            </div>
+          </div>
+        </div>
+      </button>
+    </div>
+  );
+}
+
+export default DisconnectButton;
+```
+
+3. Now we have both `ConnectButton` and `DisconnectButton` ready. Lets use them.
+
+Go to `src/App.js`. You can see that we have declared all of the wallet state variables that were required for `ConnectButton` and `DisconnectButton` component.
+
+Now we will conditonally render the button components based on `address` and `beaconConnection` state variables. If address is empty strong and beconConnection is false that means wallet is not connected so we will show `ConnectButton` and will pass all of the required variables to it. Otherwise we will simply show the `DisconnectButton`
+
+- Part of `src/App.js`
+```js
+        {userAddress === "" && !beaconConnection ? (
+          <ConnectButton
+            Tezos={Tezos}
+            setWallet={setWallet}
+            setUserAddress={setUserAddress}
+            setUserBalance={setUserBalance}
+            setBeaconConnection={setBeaconConnection}
+            wallet={wallet}
+          />
+        ) : (
+          <DisconnectButton
+            wallet={wallet}
+            setUserAddress={setUserAddress}
+            setUserBalance={setUserBalance}
+            setWallet={setWallet}
+            setTezos={setTezos}
+            setBeaconConnection={setBeaconConnection}
+            userBalance={userBalance}
+            userAddress={userAddress}
+          />
+        )}
+```
+
+## Adding Project
+Lets checkout the code for adding a project. For adding the project we have our entrypoint written on the `Crowdfunding` contract which is already deployed. 
+
+We are going to take project details in an Dialog box. Lets create this dialouge box using material UI. 
+
+We have created a different component at `src/components/ProjectOngoing.jsx` for the dialog box from which you can add prjects. This will have a function thorugh which we will call the add_projects function on our smart contract with the project details that we gather from the form.
+
+The `addProject` function will first turn the loading variable to true. Then we will point to our `crowdfunding` contract using `Tezos.wallet.at(config.contractAddress)`. And we have only one entrypoint declared in the smart contract so will call the default function which is our `add_project` function with the data we gathered from the form. After we get block confirmation we will simply close the dialog box and set the `loading` to false. 
+
+- `src/components/ProjectOngoing.jsx`
+
+```js
+import {
+  DialogTitle,
+  TextField,
+  DialogContent,
+  DialogActions,
+  Dialog,
+  Button,
+} from "@mui/material";
+import config from "../config/config";
+import LoadingButton from "@mui/lab/LoadingButton";
+import { useState } from "react";
+import { TezosToolkit } from "@taquito/taquito";
+
+/**
+ * @param {{Tezos: TezosToolkit}}
+ */
+function AddProject({ Tezos, handleClose, open }) {
+  const [loading, setloading] = useState(false);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(0);
+
+  const handleName = (event) => {
+    setName(event.target.value);
+  };
+  const handleDescription = (event) => {
+    setDescription(event.target.value);
+  };
+  const handleAmount = (event) => {
+    setAmount(event.target.value);
+  };
+  const handleDate = (event) => {
+    setDate(new Date(event.target.value));
+  };
+
+  const addProject = () => {
+    setloading(true);
+    Tezos.wallet.at(config.contractAddress).then((contract) => {
+      console.log(contract.entrypoints);
+      console.log(contract.parameterSchema);
+      try {
+        contract.methods
+          .default(description, date, parseInt(amount) * 1000000, name)
+          .send()
+          .then((op) => {
+            return op.confirmation();
+          })
+          .then((result) => {
+            if (result.completed) {
+              setloading(false);
+              handleClose();
+            }
+          });
+      } catch (e) {
+        console.log(e);
+      }
+    });
+  };
+  return (
+    <Dialog open={open} onClose={handleClose} fullWidth>
+      <DialogTitle>
+        <b>Add Project</b>
+      </DialogTitle>
+      <form>
+        <DialogContent>
+          <TextField
+            label="Project Name"
+            variant="standard"
+            fullWidth
+            margin="normal"
+            onChange={handleName}
+          />
+          <TextField
+            label="Description"
+            variant="standard"
+            multiline
+            minRows={3}
+            fullWidth
+            margin="normal"
+            onChange={handleDescription}
+          />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              justifyContent: "space-between",
+            }}
+          >
+            <TextField
+              label="Amount (in tez)"
+              variant="standard"
+              margin="normal"
+              type="number"
+              onChange={handleAmount}
+            />
+            <TextField
+              label="End date"
+              variant="standard"
+              margin="normal"
+              type="date"
+              defaultValue={new Date().toISOString().split("T")[0]}
+              onChange={handleDate}
+            />
+          </div>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose}>Cancel</Button>
+          <LoadingButton
+            onClick={addProject}
+            variant="contained"
+            loading={loading}
+          >
+            Create
+          </LoadingButton>
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
+}
+
+export default AddProject;
+
+```
+
+Our component looks like this
+
+![image](https://github.com/AniketSindhu/learn-tutorials/blob/master/assets/crowdfund_tezos_4.png)
+
+Lets use this `AddProject` component in our `src/App.js` file.
+
+First lets declare a boolean state variable which will be responsible for the visiblity of our add project dialog box.
+
+```js
+const [open, setOpen] = useState(false);
+```
+
+Now lets declare the function that will show the dialog box, hence change the open vairable to true.
+
+```js
+  const handleClickOpen = () => {
+    setOpen(true);
+  };
+```
+
+Similarly one function for closing the dialog box.
+
+```js
+  const handleClose = (value) => {
+    setOpen(false);
+    getProjects();
+  };
+```
+We are also calling the `getProjects` fuinction beacuse new project is added and we want to fetch new project list. 
+
+Now just simply we will use the `AddProject` component in the end of our return div.
+
+```js
+<AddProject Tezos={Tezos} open={open} handleClose={handleClose} />
+```
+
+And we will call the `handleOpen` function on a click of a button.
+
+Now you can easily add projects.
+
+## Fetching Projects
+
+In our `App.js` file we have a `getProjects` function in which we are fetching the projects from our `Crowdfunding` smart contract using tzkt API. We are using axios for api calls. After getting the data we will convert the data into a list of js object. Which will have the project contract address and its data.
+
+- `getProjects` function in our `App.js` file.
+
+```js
+  const getProjects = () => {
+    axios.get(`${config.API_URL}/storage`).then((res) => {
+      setProjects(
+        Object.keys(res.data).map((key) => {
+          return {
+            address: key,
+            data: res.data[key],
+          };
+        })
+      );
+    });
+  };
+```
+
+We will call this function in the `useEffect` hook because we want to fetch projects at the start of our webapp.
+
+Now we have fetched all of the projects from our smart contract's state. Lets display it on the UI.
+
+## Project Component
 
 
 
