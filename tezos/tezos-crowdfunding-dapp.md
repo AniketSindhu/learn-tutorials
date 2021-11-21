@@ -217,7 +217,50 @@ class Crowdfunding(sp.Contract):
         self.data.projects[address.value] = sp.record(owner=sp.sender, goalAmount=goalAmount, endTime=endTime, name=name, description=description)
 ```
 
-# Deploying the contract
-Now we will deploy our `crowdfunding` contract to the granadnet (testnet for tezos).
+# Tests
+Lets write some test for our smart contract. Lets try adding 2 projects using our `crowdfunding` contract.
 
-1.
+
+```python
+if "templates" not in __name__:
+    alice = sp.test_account("Alice")
+    bob = sp.test_account("Bob")
+    cat = sp.test_account("Cat")
+    @sp.add_test(name = "Crowfunding")
+    def test():
+        c1 = Crowdfunding()
+        scenario = sp.test_scenario()
+        scenario.h1("Crowdfunding")
+        scenario += c1
+        scenario.h1("Adding Project 1")
+        c1.add_project(goalAmount=sp.tez(10),endTime=sp.timestamp_from_utc(2021, 10, 29, 4, 45, 59),name=sp.string("Example Crowdfund"), description=sp.string("Example description")).run(sender=bob)
+        scenario.h1("Adding Project 2")
+        c1.add_project(goalAmount=sp.tez(20),endTime=sp.timestamp_from_utc(2021, 10, 29, 5, 45, 59),name=sp.string("Example Crowdfund 2"), description=sp.string("Example description 2")).run(sender=bob)
+    sp.add_compilation_target("Crowdfunding",Crowdfunding())
+```
+
+# Deploying the contract
+Now we will deploy our `crowdfunding` contract to the granadanet (testnet for tezos).
+
+In the SmartPy output, click on `Deploy Michelson Project`
+
+![image](https://github.com/AniketSindhu/learn-tutorials/blob/master/assets/crowdfund_tezos_1.png)
+
+Then will open a new page. Select the network where you want to deploy the smart contract, For now lets deploy it on granadanet. Then select the account which will be used to deploy the smart contract.
+
+If you need some xtz in your granadnet wallet use this facucet https://faucet.tzalpha.net/
+
+Now Click on the `Estimated Cost From Rpc` to estimate the fee in Tezos to deploy the contract. Make sure the account you are using has that much XTZ available.
+
+![image](https://github.com/AniketSindhu/learn-tutorials/blob/master/assets/crowdfund_tezos_2.png)
+
+After that click on deploy contract and sign the transaction.
+
+In the orignation result section you will see your contract address. Copy that and save it somewhere. We will use that later.
+
+![image](https://github.com/AniketSindhu/learn-tutorials/blob/master/assets/crowdfund_tezos_3.png)
+
+Congratulations! Your smart contract is now successfully deployed. Now we will move to teh frontend side.
+
+# Frontend
+
