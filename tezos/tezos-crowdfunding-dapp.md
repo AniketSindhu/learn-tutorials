@@ -134,4 +134,90 @@ class Project(sp.Contract):
         del self.data.funding[sp.sender]
 ```
 
+## Projects tracker contract
+This contract will track all of the projects, thier address and thier data. Also this contract will also be responsible for orignating new project contracts. We will declare this contract in the same smartpy file.
 
+1. Lets start by naming this contract `Crowdfunding` and inherit it from sp.Contract. Lets initialize the data with a map `projects` which will hold address of the project contract as key and its data as value.
+
+```python
+class Crowdfunding(sp.Contract):
+    def __init__(self):
+        self.project = Project()
+        self.init(projects=sp.map(
+            tkey=sp.TAddress,
+            tvalue=sp.TRecord(
+                owner=sp.TAddress,
+                goalAmount = sp.TMutez,
+                endTime=sp.TTimestamp,
+                name=sp.TString,
+                description=sp.TString)))
+```
+
+2. Now lets create an entrypoint through which users can create/orignate a new project. We will use `sp.create_contract` for orignatiing the contract. This entry point will take project details as parameters. We will also add this project to our `projects` map. 
+
+```python
+   @sp.entry_point
+    def add_project(self, goalAmount, endTime, name, description):
+        project_data = sp.local('project_data',sp.record(funding=sp.map(tkey=sp.TAddress, tvalue=None),owner=sp.sender, goalAmount=goalAmount, endTime=endTime, name=name, description=description))
+        address = sp.local('address', sp.create_contract(
+                storage = project_data.value,
+                contract = self.project))
+        self.data.projects[address.value] = sp.record(owner=sp.sender, goalAmount=goalAmount, endTime=endTime, name=name, description=description)
+```
+
+Now with this our smartpy file is ready. Both of the contracts are ready to be deployed. The file will look like this.
+
+```python
+import smartpy as sp
+
+class Project(sp.Contract):
+    def __init__(self):
+        self.init_type(sp.TRecord(funding=sp.TMap(k=sp.TAddress, v=sp.TMutez), owner=sp.TAddress, goalAmount=sp.TMutez, endTime=sp.TTimestamp, name=sp.TString, description=sp.TString))
+
+    @sp.entry_point
+    def send_fund(self):
+        sp.verify(self.data.endTime >= sp.now) 
+        sp.verify(~self.data.funding.contains(sp.sender))
+        self.data.funding[sp.sender]= sp.amount
+
+    @sp.entry_point
+    def pay_off(self):
+        sp.verify(self.data.owner==sp.sender)
+        sp.verify(self.data.goalAmount <= sp.balance)
+        sp.verify(self.data.endTime <= sp.now)
+        sp.send(self.data.owner, sp.balance)
+
+    @sp.entry_point
+    def refund(self):
+        sp.verify(self.data.funding.contains(sp.sender))
+        sp.verify(self.data.goalAmount > sp.balance)
+        sp.send(sp.sender, self.data.funding[sp.sender])
+        del self.data.funding[sp.sender]
+
+
+class Crowdfunding(sp.Contract):
+    def __init__(self):
+        self.project = Project()
+        self.init(projects=sp.map(
+            tkey=sp.TAddress,
+            tvalue=sp.TRecord(
+                owner=sp.TAddress,
+                goalAmount = sp.TMutez,
+                endTime=sp.TTimestamp,
+                name=sp.TString,
+                description=sp.TString)))
+    
+        
+    @sp.entry_point
+    def add_project(self, goalAmount, endTime, name, description):
+        project_data = sp.local('project_data',sp.record(funding=sp.map(tkey=sp.TAddress, tvalue=None),owner=sp.sender, goalAmount=goalAmount, endTime=endTime, name=name, description=description))
+        address = sp.local('address', sp.create_contract(
+                storage = project_data.value,
+                contract = self.project))
+        self.data.projects[address.value] = sp.record(owner=sp.sender, goalAmount=goalAmount, endTime=endTime, name=name, description=description)
+```
+
+# Deploying the contract
+Now we will deploy our `crowdfunding` contract to the granadnet (testnet for tezos).
+
+1.
