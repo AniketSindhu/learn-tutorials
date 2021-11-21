@@ -263,4 +263,39 @@ In the orignation result section you will see your contract address. Copy that a
 Congratulations! Your smart contract is now successfully deployed. Now we will move to teh frontend side.
 
 # Frontend
+We will build the frontend using React.js, Taquito for interacting with the contract,Tzkt api for fetching data from the smart contract, Material UI  dor the ui, and Beacon SDK for wallet connection.
+
+To get the frontend setup, we will clone the repo that includes UI and all functionalities. We will understand the frontend code in detail.
+
+## Setup
+1. Go to https://github.com/AniketSindhu/crowdfunding_tezos_dapp
+2. Now, we will clone the repository :
+
+```text
+git clone https://github.com/AniketSindhu/crowdfunding_tezos_dapp.git
+```
+
+3. Open up the cloned folder in VSCode.
+4. First run the `npm install` command in your terminal.
+5. Now we will understand the whole frontend code in detail.
+
+# Understanding frontend
+1. First of all go to `src/config/config.js`.
+```js
+var config = {
+  contractAddress: "KT1HtPviRrXJhrExpQrtRzxu6TDzz3U3hxiz",
+  get API_URL() {
+    return `https://api.granadanet.tzkt.io/v1/contracts/${this.contractAddress}`;
+  },
+  API_URL_Project: "https://api.granadanet.tzkt.io/v1/contracts/",
+};
+
+export default config;
+```
+
+Replace the contractAddress's value to the address that we got from previous steps after deploying the .
+
+This config file will have the contract address of our deployed `crowdfunding` contract and base URL for the tzkt API.
+
+
 
